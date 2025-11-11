@@ -87,13 +87,11 @@
         }
 
         /* Position black keys */
-        .black-key:nth-of-type(1) { left: 60px; }
-        .black-key:nth-of-type(2) { left: 122px; }
-        .black-key:nth-of-type(3) { left: 246px; }
-        .black-key:nth-of-type(4) { left: 308px; }
-        .black-key:nth-of-type(5) { left: 370px; }
-        .black-key:nth-of-type(6) { left: 494px; }
-        .black-key:nth-of-type(7) { left: 556px; }
+        .black-key:nth-of-type(1) { left: 40px; }  /* C# between C and D */
+        .black-key:nth-of-type(2) { left: 100px; } /* D# between D and E */
+        .black-key:nth-of-type(3) { left: 220px; } /* F# between F and G */
+        .black-key:nth-of-type(4) { left: 280px; } /* G# between G and A */
+        .black-key:nth-of-type(5) { left: 340px; } /* A# between A and B */
 
         .active {
             box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
@@ -110,8 +108,6 @@
         <div class="black-key" data-note="F#4">F#</div>
         <div class="black-key" data-note="G#4">G#</div>
         <div class="black-key" data-note="A#4">A#</div>
-        <div class="black-key" data-note="C#5">C#</div>
-        <div class="black-key" data-note="D#5">D#</div>
 
         <!-- White keys -->
         <div class="white-key" data-note="C4">C</div>
@@ -142,9 +138,7 @@
             'A4': 440.00,
             'A#4': 466.16,
             'B4': 493.88,
-            'C5': 523.25,
-            'C#5': 554.37,
-            'D#5': 622.25
+            'C5': 523.25
         };
 
         // Function to play a note
@@ -188,7 +182,7 @@
         const keyMap = {
             'a': 'C4', 'w': 'C#4', 's': 'D4', 'e': 'D#4', 'd': 'E4',
             'f': 'F4', 't': 'F#4', 'g': 'G4', 'y': 'G#4', 'h': 'A4',
-            'u': 'A#4', 'j': 'B4', 'k': 'C5', 'o': 'C#5', 'l': 'D#5'
+            'u': 'A#4', 'j': 'B4', 'k': 'C5'
         };
 
         document.addEventListener('keydown', function(e) {
