@@ -4,10 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Piano</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
         body {
             margin: 0;
@@ -19,41 +15,6 @@
             min-height: 100vh;
             background: #888;
             font-family: Arial, sans-serif;
-            position: relative;
-        }
-
-        h1 {
-            color: white;
-            margin-bottom: 30px;
-            font-size: 3em;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-
-        #camera-container {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            z-index: 1000;
-        }
-
-        #video {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 320px;
-            height: 240px;
-            opacity: 0;
-        }
-
-        #canvas {
-            display: block;
-            border-radius: 10px;
-            width: 320px;
-            height: 240px;
-            position: relative;
         }
 
         .piano {
@@ -128,29 +89,9 @@
         .active {
             box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
         }
-
-        #status {
-            position: fixed;
-            top: 270px;
-            left: 20px;
-            color: white;
-            padding: 10px 20px;
-            background: rgba(0,0,0,0.7);
-            border-radius: 5px;
-            z-index: 1000;
-            max-width: 300px;
-            font-size: 12px;
-        }
     </style>
 </head>
 <body>
-    <div id="status">Initializing camera...</div>
-
-    <div id="camera-container">
-        <video id="video" width="320" height="240" autoplay playsinline></video>
-        <canvas id="canvas" width="320" height="240"></canvas>
-    </div>
-
     <div class="piano">
         <!-- Black keys (must come first for z-index) -->
         <div class="black-key" data-note="C#4"></div>
@@ -273,211 +214,6 @@
                 deactivateKey(note);
             }
         });
-
-        // MediaPipe Hands Setup
-        const videoElement = document.getElementById('video');
-        const canvasElement = document.getElementById('canvas');
-        const canvasCtx = canvasElement.getContext('2d');
-        const statusElement = document.getElementById('status');
-
-        // Cache piano key positions for performance
-        let cachedKeyPositions = [];
-
-        function cacheKeyPositions() {
-            cachedKeyPositions = [];
-
-            // Cache black keys first (they're on top)
-            const blackKeys = document.querySelectorAll('.black-key');
-            blackKeys.forEach(key => {
-                const rect = key.getBoundingClientRect();
-                cachedKeyPositions.push({
-                    note: key.getAttribute('data-note'),
-                    left: rect.left,
-                    right: rect.right,
-                    top: rect.top,
-                    bottom: rect.bottom,
-                    isBlack: true
-                });
-            });
-
-            // Then white keys
-            const whiteKeys = document.querySelectorAll('.white-key');
-            whiteKeys.forEach(key => {
-                const rect = key.getBoundingClientRect();
-                cachedKeyPositions.push({
-                    note: key.getAttribute('data-note'),
-                    left: rect.left,
-                    right: rect.right,
-                    top: rect.top,
-                    bottom: rect.bottom,
-                    isBlack: false
-                });
-            });
-        }
-
-        // Map screen position to piano key using cached positions
-        function getKeyAtPosition(x, y) {
-            // Check black keys first
-            for (let keyPos of cachedKeyPositions) {
-                if (keyPos.isBlack && x >= keyPos.left && x <= keyPos.right &&
-                    y >= keyPos.top && y <= keyPos.bottom) {
-                    return keyPos.note;
-                }
-            }
-
-            // Then check white keys
-            for (let keyPos of cachedKeyPositions) {
-                if (!keyPos.isBlack && x >= keyPos.left && x <= keyPos.right &&
-                    y >= keyPos.top && y <= keyPos.bottom) {
-                    return keyPos.note;
-                }
-            }
-
-            return null;
-        }
-
-        // Cache positions on load and on resize
-        window.addEventListener('load', cacheKeyPositions);
-        window.addEventListener('resize', cacheKeyPositions);
-
-        // Track hand positions
-        let lastTriggeredKeys = new Set();
-
-        function onResults(results) {
-            // Clear canvas
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-            // Draw video feed
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                statusElement.textContent = `Hands detected: ${results.multiHandLandmarks.length}`;
-
-                const currentTriggeredKeys = new Set();
-
-                for (const landmarks of results.multiHandLandmarks) {
-                    // Draw hand landmarks (simplified for performance)
-                    drawConnectors(canvasCtx, landmarks, HANDS_CONNECTIONS, {color: '#00FF00', lineWidth: 1});
-                    drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 1, radius: 2});
-
-                    // Check index finger tip (landmark 8)
-                    const indexTip = landmarks[8];
-
-                    // Convert normalized coordinates to screen coordinates
-                    const x = indexTip.x * canvasElement.width;
-                    const y = indexTip.y * canvasElement.height;
-
-                    // Convert canvas coordinates to page coordinates
-                    const canvasRect = canvasElement.getBoundingClientRect();
-                    const screenX = canvasRect.left + x;
-                    const screenY = canvasRect.top + y;
-
-                    // Check if finger is over a piano key
-                    const note = getKeyAtPosition(screenX, screenY);
-                    if (note) {
-                        currentTriggeredKeys.add(note);
-
-                        // Draw indicator on canvas
-                        canvasCtx.beginPath();
-                        canvasCtx.arc(x, y, 15, 0, 2 * Math.PI);
-                        canvasCtx.fillStyle = 'rgba(255, 215, 0, 0.5)';
-                        canvasCtx.fill();
-                        canvasCtx.strokeStyle = '#FFD700';
-                        canvasCtx.lineWidth = 3;
-                        canvasCtx.stroke();
-                    }
-                }
-
-                // Activate new keys
-                for (let note of currentTriggeredKeys) {
-                    if (!lastTriggeredKeys.has(note)) {
-                        activateKey(note);
-                    }
-                }
-
-                // Deactivate keys no longer triggered
-                for (let note of lastTriggeredKeys) {
-                    if (!currentTriggeredKeys.has(note)) {
-                        deactivateKey(note);
-                    }
-                }
-
-                lastTriggeredKeys = currentTriggeredKeys;
-            } else {
-                statusElement.textContent = 'No hands detected - move your hands in front of the camera';
-
-                // Deactivate all hand-triggered keys
-                for (let note of lastTriggeredKeys) {
-                    deactivateKey(note);
-                }
-                lastTriggeredKeys.clear();
-            }
-
-            canvasCtx.restore();
-        }
-
-        // Initialize MediaPipe Hands
-        const hands = new Hands({
-            locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-            }
-        });
-
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 0,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-
-        hands.onResults(onResults);
-
-        // Initialize camera with getUserMedia for better compatibility
-        async function initCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 320, height: 240 }
-                });
-                videoElement.srcObject = stream;
-
-                await videoElement.play();
-
-                statusElement.textContent = 'Camera ready - move your index finger over piano keys to play!';
-
-                // Start processing frames
-                processFrame();
-            } catch (error) {
-                statusElement.textContent = 'Camera access denied or not available';
-                console.error('Camera error:', error);
-            }
-        }
-
-        let isProcessing = false;
-
-        async function processFrame() {
-            // Request next frame immediately (non-blocking)
-            requestAnimationFrame(processFrame);
-
-            // Skip if already processing to prevent backlog
-            if (isProcessing) {
-                return;
-            }
-
-            if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
-                isProcessing = true;
-                try {
-                    await hands.send({image: videoElement});
-                } catch (error) {
-                    console.error('Hand tracking error:', error);
-                } finally {
-                    isProcessing = false;
-                }
-            }
-        }
-
-        // Start camera
-        initCamera();
     </script>
 </body>
 </html>
