@@ -280,39 +280,65 @@
         const canvasCtx = canvasElement.getContext('2d');
         const statusElement = document.getElementById('status');
 
-        // Map screen position to piano key
-        function getKeyAtPosition(x, y) {
-            const pianoElement = document.querySelector('.piano');
-            const pianoRect = pianoElement.getBoundingClientRect();
+        // Cache piano key positions for performance
+        let cachedKeyPositions = [];
 
-            // Check if position is within piano bounds
-            if (y < pianoRect.top || y > pianoRect.bottom ||
-                x < pianoRect.left || x > pianoRect.right) {
-                return null;
-            }
+        function cacheKeyPositions() {
+            cachedKeyPositions = [];
 
-            // Check black keys first (they're on top)
+            // Cache black keys first (they're on top)
             const blackKeys = document.querySelectorAll('.black-key');
-            for (let key of blackKeys) {
+            blackKeys.forEach(key => {
                 const rect = key.getBoundingClientRect();
-                if (x >= rect.left && x <= rect.right &&
-                    y >= rect.top && y <= rect.bottom) {
-                    return key.getAttribute('data-note');
+                cachedKeyPositions.push({
+                    note: key.getAttribute('data-note'),
+                    left: rect.left,
+                    right: rect.right,
+                    top: rect.top,
+                    bottom: rect.bottom,
+                    isBlack: true
+                });
+            });
+
+            // Then white keys
+            const whiteKeys = document.querySelectorAll('.white-key');
+            whiteKeys.forEach(key => {
+                const rect = key.getBoundingClientRect();
+                cachedKeyPositions.push({
+                    note: key.getAttribute('data-note'),
+                    left: rect.left,
+                    right: rect.right,
+                    top: rect.top,
+                    bottom: rect.bottom,
+                    isBlack: false
+                });
+            });
+        }
+
+        // Map screen position to piano key using cached positions
+        function getKeyAtPosition(x, y) {
+            // Check black keys first
+            for (let keyPos of cachedKeyPositions) {
+                if (keyPos.isBlack && x >= keyPos.left && x <= keyPos.right &&
+                    y >= keyPos.top && y <= keyPos.bottom) {
+                    return keyPos.note;
                 }
             }
 
             // Then check white keys
-            const whiteKeys = document.querySelectorAll('.white-key');
-            for (let key of whiteKeys) {
-                const rect = key.getBoundingClientRect();
-                if (x >= rect.left && x <= rect.right &&
-                    y >= rect.top && y <= rect.bottom) {
-                    return key.getAttribute('data-note');
+            for (let keyPos of cachedKeyPositions) {
+                if (!keyPos.isBlack && x >= keyPos.left && x <= keyPos.right &&
+                    y >= keyPos.top && y <= keyPos.bottom) {
+                    return keyPos.note;
                 }
             }
 
             return null;
         }
+
+        // Cache positions on load and on resize
+        window.addEventListener('load', cacheKeyPositions);
+        window.addEventListener('resize', cacheKeyPositions);
 
         // Track hand positions
         let lastTriggeredKeys = new Set();
@@ -331,9 +357,9 @@
                 const currentTriggeredKeys = new Set();
 
                 for (const landmarks of results.multiHandLandmarks) {
-                    // Draw hand landmarks
-                    drawConnectors(canvasCtx, landmarks, HANDS_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
-                    drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 1, radius: 3});
+                    // Draw hand landmarks (simplified for performance)
+                    drawConnectors(canvasCtx, landmarks, HANDS_CONNECTIONS, {color: '#00FF00', lineWidth: 1});
+                    drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 1, radius: 2});
 
                     // Check index finger tip (landmark 8)
                     const indexTip = landmarks[8];
@@ -399,8 +425,8 @@
         });
 
         hands.setOptions({
-            maxNumHands: 2,
-            modelComplexity: 1,
+            maxNumHands: 1,
+            modelComplexity: 0,
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5
         });
@@ -427,11 +453,27 @@
             }
         }
 
+        let isProcessing = false;
+
         async function processFrame() {
-            if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
-                await hands.send({image: videoElement});
-            }
+            // Request next frame immediately (non-blocking)
             requestAnimationFrame(processFrame);
+
+            // Skip if already processing to prevent backlog
+            if (isProcessing) {
+                return;
+            }
+
+            if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+                isProcessing = true;
+                try {
+                    await hands.send({image: videoElement});
+                } catch (error) {
+                    console.error('Hand tracking error:', error);
+                } finally {
+                    isProcessing = false;
+                }
+            }
         }
 
         // Start camera
