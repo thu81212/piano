@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Piano</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
         body {
             margin: 0;
@@ -22,6 +26,25 @@
             margin-bottom: 30px;
             font-size: 3em;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        #camera-container {
+            position: relative;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        #video {
+            display: none;
+        }
+
+        #canvas {
+            display: block;
+            border-radius: 10px;
+            max-width: 640px;
+            width: 100%;
         }
 
         .piano {
@@ -96,9 +119,24 @@
         .active {
             box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
         }
+
+        #status {
+            color: white;
+            margin-bottom: 10px;
+            padding: 10px 20px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
+    <div id="status">Initializing camera...</div>
+
+    <div id="camera-container">
+        <video id="video" width="640" height="480" autoplay></video>
+        <canvas id="canvas" width="640" height="480"></canvas>
+    </div>
+
     <div class="piano">
         <!-- Black keys (must come first for z-index) -->
         <div class="black-key" data-note="C#4"></div>
@@ -139,6 +177,9 @@
             'C5': 523.25
         };
 
+        // Track which keys are currently playing to avoid repeats
+        const activeNotes = new Set();
+
         // Function to play a note
         function playNote(frequency, duration = 0.5) {
             const oscillator = audioContext.createOscillator();
@@ -157,22 +198,44 @@
             oscillator.stop(audioContext.currentTime + duration);
         }
 
+        // Function to activate a key
+        function activateKey(note) {
+            if (!activeNotes.has(note)) {
+                activeNotes.add(note);
+                const frequency = noteFrequencies[note];
+                playNote(frequency);
+                const keyElement = document.querySelector(`[data-note="${note}"]`);
+                if (keyElement) {
+                    keyElement.classList.add('active');
+                }
+            }
+        }
+
+        // Function to deactivate a key
+        function deactivateKey(note) {
+            activeNotes.delete(note);
+            const keyElement = document.querySelector(`[data-note="${note}"]`);
+            if (keyElement) {
+                keyElement.classList.remove('active');
+            }
+        }
+
         // Add click event listeners to all keys
         const keys = document.querySelectorAll('.white-key, .black-key');
         keys.forEach(key => {
             key.addEventListener('mousedown', function() {
                 const note = this.getAttribute('data-note');
-                const frequency = noteFrequencies[note];
-                playNote(frequency);
-                this.classList.add('active');
+                activateKey(note);
             });
 
             key.addEventListener('mouseup', function() {
-                this.classList.remove('active');
+                const note = this.getAttribute('data-note');
+                deactivateKey(note);
             });
 
             key.addEventListener('mouseleave', function() {
-                this.classList.remove('active');
+                const note = this.getAttribute('data-note');
+                deactivateKey(note);
             });
         });
 
@@ -186,24 +249,164 @@
         document.addEventListener('keydown', function(e) {
             const note = keyMap[e.key.toLowerCase()];
             if (note && noteFrequencies[note]) {
-                const frequency = noteFrequencies[note];
-                playNote(frequency);
-
-                const keyElement = document.querySelector(`[data-note="${note}"]`);
-                if (keyElement) {
-                    keyElement.classList.add('active');
-                }
+                activateKey(note);
             }
         });
 
         document.addEventListener('keyup', function(e) {
             const note = keyMap[e.key.toLowerCase()];
             if (note) {
-                const keyElement = document.querySelector(`[data-note="${note}"]`);
-                if (keyElement) {
-                    keyElement.classList.remove('active');
+                deactivateKey(note);
+            }
+        });
+
+        // MediaPipe Hands Setup
+        const videoElement = document.getElementById('video');
+        const canvasElement = document.getElementById('canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const statusElement = document.getElementById('status');
+
+        // Map screen position to piano key
+        function getKeyAtPosition(x, y) {
+            const pianoElement = document.querySelector('.piano');
+            const pianoRect = pianoElement.getBoundingClientRect();
+
+            // Check if position is within piano bounds
+            if (y < pianoRect.top || y > pianoRect.bottom ||
+                x < pianoRect.left || x > pianoRect.right) {
+                return null;
+            }
+
+            // Check black keys first (they're on top)
+            const blackKeys = document.querySelectorAll('.black-key');
+            for (let key of blackKeys) {
+                const rect = key.getBoundingClientRect();
+                if (x >= rect.left && x <= rect.right &&
+                    y >= rect.top && y <= rect.bottom) {
+                    return key.getAttribute('data-note');
                 }
             }
+
+            // Then check white keys
+            const whiteKeys = document.querySelectorAll('.white-key');
+            for (let key of whiteKeys) {
+                const rect = key.getBoundingClientRect();
+                if (x >= rect.left && x <= rect.right &&
+                    y >= rect.top && y <= rect.bottom) {
+                    return key.getAttribute('data-note');
+                }
+            }
+
+            return null;
+        }
+
+        // Track hand positions
+        let lastTriggeredKeys = new Set();
+
+        function onResults(results) {
+            // Clear canvas
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            // Draw video feed
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                statusElement.textContent = `Hands detected: ${results.multiHandLandmarks.length}`;
+
+                const currentTriggeredKeys = new Set();
+
+                for (const landmarks of results.multiHandLandmarks) {
+                    // Draw hand landmarks
+                    drawConnectors(canvasCtx, landmarks, HANDS_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+                    drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 1, radius: 3});
+
+                    // Check index finger tip (landmark 8)
+                    const indexTip = landmarks[8];
+
+                    // Convert normalized coordinates to screen coordinates
+                    const x = indexTip.x * canvasElement.width;
+                    const y = indexTip.y * canvasElement.height;
+
+                    // Convert canvas coordinates to page coordinates
+                    const canvasRect = canvasElement.getBoundingClientRect();
+                    const screenX = canvasRect.left + x;
+                    const screenY = canvasRect.top + y;
+
+                    // Check if finger is over a piano key
+                    const note = getKeyAtPosition(screenX, screenY);
+                    if (note) {
+                        currentTriggeredKeys.add(note);
+
+                        // Draw indicator on canvas
+                        canvasCtx.beginPath();
+                        canvasCtx.arc(x, y, 15, 0, 2 * Math.PI);
+                        canvasCtx.fillStyle = 'rgba(255, 215, 0, 0.5)';
+                        canvasCtx.fill();
+                        canvasCtx.strokeStyle = '#FFD700';
+                        canvasCtx.lineWidth = 3;
+                        canvasCtx.stroke();
+                    }
+                }
+
+                // Activate new keys
+                for (let note of currentTriggeredKeys) {
+                    if (!lastTriggeredKeys.has(note)) {
+                        activateKey(note);
+                    }
+                }
+
+                // Deactivate keys no longer triggered
+                for (let note of lastTriggeredKeys) {
+                    if (!currentTriggeredKeys.has(note)) {
+                        deactivateKey(note);
+                    }
+                }
+
+                lastTriggeredKeys = currentTriggeredKeys;
+            } else {
+                statusElement.textContent = 'No hands detected - move your hands in front of the camera';
+
+                // Deactivate all hand-triggered keys
+                for (let note of lastTriggeredKeys) {
+                    deactivateKey(note);
+                }
+                lastTriggeredKeys.clear();
+            }
+
+            canvasCtx.restore();
+        }
+
+        // Initialize MediaPipe Hands
+        const hands = new Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }
+        });
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        // Initialize camera
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480
+        });
+
+        camera.start().then(() => {
+            statusElement.textContent = 'Camera ready - move your index finger over piano keys to play!';
+        }).catch((error) => {
+            statusElement.textContent = 'Camera access denied or not available';
+            console.error('Camera error:', error);
         });
     </script>
 </body>
