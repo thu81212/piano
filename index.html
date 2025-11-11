@@ -34,8 +34,8 @@
         }
 
         .white-key {
-            width: 60px;
-            height: 250px;
+            width: 100px;
+            height: 400px;
             background: white;
             border: 2px solid #000;
             border-radius: 0 0 5px 5px;
@@ -60,8 +60,8 @@
         }
 
         .black-key {
-            width: 40px;
-            height: 150px;
+            width: 70px;
+            height: 250px;
             background: linear-gradient(to bottom, #000 0%, #333 100%);
             border: 1px solid #000;
             border-radius: 0 0 3px 3px;
@@ -87,11 +87,11 @@
         }
 
         /* Position black keys */
-        .black-key:nth-of-type(1) { left: 40px; }  /* C# between C and D */
-        .black-key:nth-of-type(2) { left: 100px; } /* D# between D and E */
-        .black-key:nth-of-type(3) { left: 220px; } /* F# between F and G */
-        .black-key:nth-of-type(4) { left: 280px; } /* G# between G and A */
-        .black-key:nth-of-type(5) { left: 340px; } /* A# between A and B */
+        .black-key:nth-of-type(1) { left: 65px; }  /* C# between C and D */
+        .black-key:nth-of-type(2) { left: 165px; } /* D# between D and E */
+        .black-key:nth-of-type(3) { left: 365px; } /* F# between F and G */
+        .black-key:nth-of-type(4) { left: 465px; } /* G# between G and A */
+        .black-key:nth-of-type(5) { left: 565px; } /* A# between A and B */
 
         .active {
             box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
@@ -99,8 +99,6 @@
     </style>
 </head>
 <body>
-    <h1>Piano</h1>
-
     <div class="piano">
         <!-- Black keys (must come first for z-index) -->
         <div class="black-key" data-note="C#4"></div>
